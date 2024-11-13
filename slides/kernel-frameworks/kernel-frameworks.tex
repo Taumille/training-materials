@@ -22,7 +22,7 @@
 
 \begin{frame}
   \frametitle{Types of devices} Under Linux, there are essentially
-  three types of devices:
+  four types of devices:
   \begin{itemize}
   \item {\bf Network devices}. They are represented as network
     interfaces, visible in user space using \code{ip a}
@@ -34,6 +34,10 @@
     applications access to all other types of devices (input, sound,
     graphics, serial, etc.). They are also visible to the applications
     as {\em device files} in \code{/dev}.
+  \item {\bf Sysfs devices}. They don't have any of the above user space
+    interfaces, only a representation in sysfs. "Internal" device drivers
+    fall under this (e.g. pinctrl), but also some user-space accessible
+    devices. E.g. gpio (deprecated), IIO (Industrial I/O).
   \end{itemize}
   $\rightarrow$ Most devices are {\em character devices}, so we will
   study these in more details.
@@ -48,9 +52,15 @@
     device.
   \item The {\em minor number} allows drivers to distinguish
     the various devices they manage.
-  \item Most major and minor numbers are statically allocated, and
+  \item Some major numbers are statically allocated, and
     identical across all Linux systems.
-  \item They are defined in \kdochtml{admin-guide/devices}.
+  \item Since +- 2016, new frameworks use dynamically allocated major
+    numbers when possible.
+  \item Minor numbers are almost always (partially) dynamically allocated,
+    by the framework itself. Allcation happens in order of enumeration of
+    the devices.
+  \item Pre-defined values, ranges and rules can be found in
+    \kdochtml{admin-guide/devices}.
   \end{itemize}
 \end{frame}
 
@@ -596,6 +606,21 @@ void foo_remove(struct platform_device *pdev)
 
 \end{frame}
 
+\begin{frame}
+  \frametitle{Device managed allocations caveats}
+  \begin{itemize}
+  \item Cleanup is done when the \code{struct device} is cleaned up.
+    There is no reference counting or anything like that.
+  \item Don't use if the allocated memory is used outside of the device
+    node. E.g. if the userspace device file is still open after remove.
+  \item Be very careful when there are circular references.
+  \item \href{https://lpc.events/event/16/contributions/1227/}{"Why is
+    \code{devm_kzalloc()} harmful and what can we do about it",
+    Laurent Pinchart, LPC 2022}
+  \end{itemize}
+\end{frame}
+
+
 \subsection{Driver data structures and links}
 
 \begin{frame}
@@ -634,6 +659,12 @@ struct imx_port {
     [...]
 };
   \end{minted}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+  \frametitle{Driver-specific Data Structure Examples 2/2}
+  \begin{itemize}
   \item ds1305 RTC driver: \kstruct{ds1305} has a reference to
     \kstruct{rtc_device}
   \begin{minted}[fontsize=\scriptsize]{c}
@@ -642,13 +673,13 @@ struct ds1305 {
     struct rtc_device       *rtc;
     [...]
 };
-  \end{minted}
-  \end{itemize}
-\end{frame}
 
-\begin{frame}[fragile]
-  \frametitle{Driver-specific Data Structure Examples 2/2}
-  \begin{itemize}
+static int ds1305_alarm_irq_enable(struct device *dev, unsigned int enabled)
+{
+    struct ds1305 *ds1305 = dev_get_drvdata(dev);
+    [ ..]
+}
+  \end{minted}
   \item rtl8150 network driver: \kstruct{rtl8150} has a reference to
     \kstruct{net_device} and is allocated within that framework structure.
   \begin{minted}[fontsize=\scriptsize]{c}
