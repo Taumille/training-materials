@@ -1,5 +1,6 @@
 #!/bin/sh
 
+
 # Definitions
 TARGETIP=192.168.0.100
 PATH=$HOME/embedded-linux-bbb-labs/integration/buildroot/output/host/bin:$PATH

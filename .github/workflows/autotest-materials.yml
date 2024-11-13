@@ -1,0 +1,74 @@
+name: Autotest materials
+
+on:
+  push:
+    paths:
+      - 'lab-data/**'
+  pull_request:
+    paths:
+      - 'lab-data/**'
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      sysdev-stm32: ${{ steps.changes.output.sysdev-stm32 }}
+      sysdev-bbb: ${{ steps.changes.output.sysdev-bbb }}
+      sysdev-beagleplay: ${{ steps.changes.output.sysdev-bbb }}
+    steps:
+      - uses: actions/checkout@v3
+
+  prepare-test:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Checkout test repository
+        uses: actions/checkout@v4
+        with:
+          repository: 'Taumille/resources'  # Replace with the owner and repository name
+          token: ${{secrets.CONTOKEN}}
+          path: resources
+          ref: 'master'
+      - name: Setup test repo
+        run: |
+          cd resources/tests/autotest_labs
+          sed -i "s/docker run -it/docker run -i/g" run-lab.sh
+          mkdir output
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            sysdev-stm32:
+              - 'lab-data/embedded-linux/**'
+            sysdev-bbb:
+              - 'lab-data/embedded-linux-bbb/**'
+            sysdev-beagleplay:
+              - 'lab-data/embedded-linux-beagleplay/**'
+
+      - if: steps.changes.outputs.sysdev-stm32 == 'true'
+        name: Run sysdev stm32 lab
+        run: |
+          make embedded-linux-labs.tar.xz
+          mv embedded-linux-labs.tar.xz resources/tests/autotest_labs
+          cd resources/tests/autotest_labs
+          echo "UID : $UID"
+          ./entrypoint.sh -r -t sysdev -b stm32 -o output/ -u embedded-linux-labs.tar.xz
+
+      - if: steps.changes.outputs.sysdev-bbb == 'true'
+        name: Run sysdev Beagle Bone Black labs
+        run: |
+          make embedded-linux-bbb-labs.tar.xz
+          mv embedded-linux-bbb-labs.tar.xz resources/tests/autotest_labs
+          cd resources/tests/autotest_labs
+          ls
+          ./entrypoint.sh -r -t sysdev -b beaglebone -o output/ -u ../embedded-linux-bbb-labs.tar.xz
+
+      - if: steps.changes.outputs.sysdev-beagleplay == 'true'
+        name: Run sysdev BeaglePlay labs
+        run: |
+          make embedded-linux-beagleplay-labs.tar.xz
+          mv embedded-linux-beagleplay-labs.tar.xz resources/tests/autotest_labs
+          cd resources/tests/autotest_labs
+          echo "UID : $UID"
+          ./entrypoint.sh -r -t sysdev -b beagleplay -o output/ -u embedded-linux-beagleplay-labs.tar.xz
